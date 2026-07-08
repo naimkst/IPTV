@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Hls from "hls.js";
 import {
   AlertCircle,
+  Check,
+  Copy,
   Heart,
   Loader2,
   MapPin,
@@ -94,6 +96,7 @@ export default function App() {
     error: "",
     hint: "",
   });
+  const [copiedStreamUrl, setCopiedStreamUrl] = useState(false);
   const [qualitySelection, setQualitySelection] = useState("best");
   const [qualityLevels, setQualityLevels] = useState([]);
   const [activeQualityLabel, setActiveQualityLabel] = useState("Best available");
@@ -269,6 +272,10 @@ export default function App() {
 
     setActiveQualityLabel(applyQualitySelection(hlsRef.current, qualitySelection));
   }, [qualitySelection]);
+
+  useEffect(() => {
+    setCopiedStreamUrl(false);
+  }, [selectedChannel?.url]);
 
   useEffect(() => {
     if (!selectedChannel || !videoRef.current) {
@@ -622,6 +629,20 @@ export default function App() {
 
     if (nextChannel) {
       selectChannel(nextChannel);
+    }
+  }
+
+  async function copySelectedStreamUrl() {
+    if (!selectedChannel?.url) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(selectedChannel.url);
+      setCopiedStreamUrl(true);
+      window.setTimeout(() => setCopiedStreamUrl(false), 1800);
+    } catch {
+      setCopiedStreamUrl(false);
     }
   }
 
@@ -1139,6 +1160,17 @@ export default function App() {
                   Remove override
                 </button>
               )}
+            </div>
+          )}
+
+          {selectedChannel?.url && (
+            <div className="stream-url-panel" aria-label="Current stream URL">
+              <span>Stream URL</span>
+              <code>{selectedChannel.url}</code>
+              <button className="text-button" type="button" onClick={copySelectedStreamUrl}>
+                {copiedStreamUrl ? <Check size={18} /> : <Copy size={18} />}
+                {copiedStreamUrl ? "Copied" : "Copy URL"}
+              </button>
             </div>
           )}
 
