@@ -27,7 +27,7 @@ The app runs on localhost, fetches the playlists directly in the browser, parses
 - Search, category filter, country filter, and favorites-only filter
 - Favorites saved in `localStorage`
 - HLS.js playback for `.m3u8` streams
-- Quality selector with `Optimize` adaptive mode and fixed levels such as `144p`, `HD`, or `4K` when the stream advertises them
+- Quality selector with default `Best available`, `Optimize` adaptive mode, and fixed levels such as `144p`, `HD`, or `4K` when the stream advertises them
 - Local HLS proxy toggle for public streams that fail in the browser because of CORS
 - Buffer-ahead and live-delay readouts for the current stream
 - Loading, empty, and error states

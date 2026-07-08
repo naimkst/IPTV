@@ -496,10 +496,9 @@ select {
 }
 
 .watch-panel {
-  display: grid;
-  grid-template-rows: auto auto auto auto;
+  display: flex;
+  flex-direction: column;
   align-self: start;
-  align-content: start;
   gap: 14px;
   max-height: 100%;
   overflow: auto;
@@ -507,6 +506,7 @@ select {
 
 .player-frame {
   position: relative;
+  order: 1;
   width: 100%;
   min-height: 260px;
   max-height: min(68vh, 720px);
@@ -587,6 +587,7 @@ select {
 }
 
 .now-playing {
+  order: 3;
   grid-template-columns: 82px minmax(0, 1fr) auto;
   align-items: center;
   gap: 14px;
@@ -614,10 +615,15 @@ select {
 }
 
 .playback-controls {
+  order: 2;
   grid-template-columns: minmax(190px, 1.2fr) repeat(3, minmax(96px, 0.6fr));
   align-items: end;
   gap: 10px;
   padding: 14px;
+}
+
+.source-panel {
+  order: 4;
 }
 
 .playback-controls .text-button {
@@ -779,10 +785,6 @@ select {
 
   .custom-stream-grid {
     grid-template-columns: 1fr;
-  }
-
-  .watch-panel {
-    grid-template-rows: auto auto auto auto;
   }
 
   .player-frame {

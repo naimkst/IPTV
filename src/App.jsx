@@ -94,9 +94,9 @@ export default function App() {
     error: "",
     hint: "",
   });
-  const [qualitySelection, setQualitySelection] = useState("auto");
+  const [qualitySelection, setQualitySelection] = useState("best");
   const [qualityLevels, setQualityLevels] = useState([]);
-  const [activeQualityLabel, setActiveQualityLabel] = useState("Optimize");
+  const [activeQualityLabel, setActiveQualityLabel] = useState("Best available");
   const [playbackStats, setPlaybackStats] = useState({
     bufferAhead: 0,
     liveDelay: null,
@@ -108,6 +108,7 @@ export default function App() {
   const streamFailureCountRef = useRef(0);
   const filteredChannelsRef = useRef([]);
   const autoSkipFailedRef = useRef(autoSkipFailed);
+  const qualitySelectionRef = useRef(qualitySelection);
 
   const favoriteSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
   const unavailableSet = useMemo(
@@ -260,11 +261,13 @@ export default function App() {
   }, [useLocalProxy]);
 
   useEffect(() => {
+    qualitySelectionRef.current = qualitySelection;
+
     if (!hlsRef.current) {
       return;
     }
 
-    applyQualitySelection(hlsRef.current, qualitySelection);
+    setActiveQualityLabel(applyQualitySelection(hlsRef.current, qualitySelection));
   }, [qualitySelection]);
 
   useEffect(() => {
@@ -281,7 +284,9 @@ export default function App() {
     streamFailureCountRef.current = 0;
     hlsRef.current = null;
     setQualityLevels([]);
-    setActiveQualityLabel("Optimize");
+    setActiveQualityLabel(
+      qualitySelectionRef.current === "best" ? "Best available" : "Optimize",
+    );
     setPlaybackStats({ bufferAhead: 0, liveDelay: null });
     setPlayerState({ loading: true, error: "", hint: "" });
     video.pause();
@@ -415,7 +420,7 @@ export default function App() {
         if (!cancelled) {
           clearRetryTimer();
           setQualityLevels(createQualityLevels(hls.levels));
-          applyQualitySelection(hls, "auto");
+          setActiveQualityLabel(applyQualitySelection(hls, qualitySelectionRef.current));
           setPlayerState({ loading: false, error: "", hint: "" });
           startPlayback();
         }
@@ -605,7 +610,7 @@ export default function App() {
   }
 
   function selectChannel(channel) {
-    setQualitySelection("auto");
+    setQualitySelection("best");
     setUnavailableChannelIds((current) => current.filter((id) => id !== channel.id));
     setSelectedChannel(channel);
   }
@@ -1095,6 +1100,7 @@ export default function App() {
                   onChange={(event) => setQualitySelection(event.target.value)}
                 >
                   <option value="auto">Optimize</option>
+                  <option value="best">Best available</option>
                   {qualityLevels.map((level) => (
                     <option key={level.index} value={String(level.index)}>
                       {level.label}
@@ -1611,20 +1617,47 @@ function formatBitrate(bitsPerSecond) {
 
 function applyQualitySelection(hls, selection) {
   if (!hls) {
-    return;
+    return "Best available";
   }
 
   if (selection === "auto") {
     hls.currentLevel = -1;
     hls.nextLevel = -1;
-    return;
+    return "Optimize";
+  }
+
+  if (selection === "best") {
+    const bestLevel = getBestQualityLevel(hls.levels);
+
+    if (bestLevel) {
+      hls.currentLevel = bestLevel.index;
+      hls.nextLevel = bestLevel.index;
+      return formatQualityLabel(bestLevel.level);
+    }
+
+    return "Best available";
   }
 
   const levelIndex = Number(selection);
 
   if (Number.isInteger(levelIndex) && levelIndex >= 0) {
     hls.currentLevel = levelIndex;
+    hls.nextLevel = levelIndex;
+    return formatQualityLabel(hls.levels[levelIndex]);
   }
+
+  return "Optimize";
+}
+
+function getBestQualityLevel(levels = []) {
+  return levels
+    .map((level, index) => ({
+      index,
+      level,
+      height: Number(level.height) || 0,
+      bitrate: Number(level.bitrate) || 0,
+    }))
+    .sort((first, second) => second.height - first.height || second.bitrate - first.bitrate)[0];
 }
 
 function getBufferAhead(video) {
