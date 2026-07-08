@@ -147,7 +147,7 @@ h1 {
 
 .app-layout {
   display: grid;
-  grid-template-columns: minmax(340px, 420px) minmax(0, 1fr);
+  grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
   gap: 18px;
   align-items: stretch;
   min-height: 0;
@@ -508,8 +508,8 @@ select {
   position: relative;
   order: 1;
   width: 100%;
-  min-height: 260px;
-  max-height: min(68vh, 720px);
+  min-height: clamp(340px, 56vh, 620px);
+  max-height: min(78vh, 840px);
   aspect-ratio: 16 / 9;
   overflow: hidden;
   border: 1px solid var(--border-strong);
@@ -578,8 +578,7 @@ select {
 }
 
 .now-playing,
-.playback-controls,
-.source-panel {
+.playback-controls {
   display: grid;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -622,10 +621,6 @@ select {
   padding: 14px;
 }
 
-.source-panel {
-  order: 4;
-}
-
 .playback-controls .text-button {
   min-height: 48px;
   justify-content: center;
@@ -662,32 +657,6 @@ select {
   line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.source-panel {
-  gap: 6px;
-  padding: 14px;
-}
-
-.source-list {
-  display: grid;
-  gap: 6px;
-}
-
-.source-panel span,
-.source-panel small {
-  color: var(--muted);
-  font-weight: 800;
-}
-
-.source-panel code {
-  overflow-wrap: anywhere;
-  color: var(--green);
-  font-size: 0.92rem;
-}
-
-.source-panel .warning-text {
-  color: var(--danger);
 }
 
 .state-message {
@@ -814,7 +783,7 @@ select {
 
 @media (min-width: 1400px) {
   .app-layout {
-    grid-template-columns: minmax(380px, 460px) minmax(0, 1fr);
+    grid-template-columns: minmax(340px, 400px) minmax(0, 1fr);
   }
 
   .channel-button {

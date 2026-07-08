@@ -1142,26 +1142,6 @@ export default function App() {
             </div>
           )}
 
-          <div className="source-panel">
-            <span>Playlists</span>
-            <div className="source-list">
-              {PLAYLISTS.map((source) => (
-                <code key={source.url}>
-                  {source.name}: {source.url}
-                </code>
-              ))}
-            </div>
-            {playlistState.loadedAt && (
-              <small>
-                Loaded {playlistState.loadedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} from{" "}
-                {playlistState.sourcesLoaded} source{playlistState.sourcesLoaded === 1 ? "" : "s"}.{" "}
-                {playlistState.skippedUnsupported.toLocaleString()} non-HLS entries skipped,{" "}
-                {playlistState.skippedDuplicates.toLocaleString()} duplicate HLS streams removed,{" "}
-                {hiddenChannelCount.toLocaleString()} failed streams marked.
-              </small>
-            )}
-            {playlistState.warning && <small className="warning-text">{playlistState.warning}</small>}
-          </div>
         </section>
       </main>
     </div>
