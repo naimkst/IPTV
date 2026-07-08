@@ -1,9 +1,10 @@
 # Local IPTV Lab
 
-Local IPTV Lab is a browser-only React app for testing free/public legal M3U streams. It ships with four default public playlist sources:
+Local IPTV Lab is a browser-only React app for testing free/public legal M3U streams. It ships with five default public playlist sources:
 
 - https://iptv-org.github.io/iptv/index.m3u
 - https://iptv-org.github.io/iptv/categories/sports.m3u
+- https://iptv-org.github.io/iptv/countries/pk.m3u
 - https://iptv-org.github.io/iptv/countries/bd.m3u
 - https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8
 
@@ -21,7 +22,7 @@ The app runs on localhost, fetches the playlists directly in the browser, parses
 - `Try next` control for manually jumping to the next channel in the current filter
 - Custom HLS tester for saving and playing direct `.m3u8` URLs you are allowed to use
 - Separate `Custom` tab for saved local channels, with delete controls
-- Sports, World Cup, and Bangladesh focus buttons for quickly narrowing the channel list
+- Sports, World Cup, Pakistan, and Bangladesh focus buttons for quickly narrowing the channel list
 - Search, category filter, country filter, and favorites-only filter
 - Favorites saved in `localStorage`
 - HLS.js playback for `.m3u8` streams

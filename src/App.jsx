@@ -24,6 +24,10 @@ const PLAYLISTS = [
     url: "https://iptv-org.github.io/iptv/categories/sports.m3u",
   },
   {
+    name: "IPTV-org Pakistan",
+    url: "https://iptv-org.github.io/iptv/countries/pk.m3u",
+  },
+  {
     name: "IPTV-org Bangladesh",
     url: "https://iptv-org.github.io/iptv/countries/bd.m3u",
   },
@@ -41,6 +45,7 @@ const FOCUS_FILTERS = {
   all: "all",
   sports: "sports",
   worldCup: "world-cup",
+  pakistan: "pakistan",
   bangladesh: "bangladesh",
   custom: "custom",
 };
@@ -143,6 +148,7 @@ export default function App() {
         focusFilter === FOCUS_FILTERS.custom ||
         (focusFilter === FOCUS_FILTERS.sports && isSportsChannel(channel)) ||
         (focusFilter === FOCUS_FILTERS.worldCup && isWorldCupCandidate(channel)) ||
+        (focusFilter === FOCUS_FILTERS.pakistan && isPakistanChannel(channel)) ||
         (focusFilter === FOCUS_FILTERS.bangladesh && isBangladeshChannel(channel));
       const matchesFavorites = !favoritesOnly || favoriteSet.has(channel.id);
 
@@ -171,6 +177,10 @@ export default function App() {
   );
   const bangladeshChannelCount = useMemo(
     () => publicChannels.filter(isBangladeshChannel).length,
+    [publicChannels],
+  );
+  const pakistanChannelCount = useMemo(
+    () => publicChannels.filter(isPakistanChannel).length,
     [publicChannels],
   );
   const customChannelCount = customSavedChannels.length;
@@ -756,6 +766,14 @@ export default function App() {
                 Bangladesh ({bangladeshChannelCount.toLocaleString()})
               </button>
               <button
+                className={`text-button ${focusFilter === FOCUS_FILTERS.pakistan ? "is-active" : ""}`}
+                type="button"
+                onClick={() => toggleFocusFilter(FOCUS_FILTERS.pakistan)}
+              >
+                <MapPin size={18} />
+                Pakistan ({pakistanChannelCount.toLocaleString()})
+              </button>
+              <button
                 className={`text-button ${focusFilter === FOCUS_FILTERS.custom ? "is-active" : ""}`}
                 type="button"
                 onClick={() => {
@@ -1271,6 +1289,25 @@ function isBangladeshChannel(channel) {
     .toLowerCase();
 
   return /\bbangladesh\b/.test(searchable);
+}
+
+function isPakistanChannel(channel) {
+  if (channel.countryCode === "PK" || channel.country === "Pakistan") {
+    return true;
+  }
+
+  const searchable = [
+    channel.name,
+    channel.category,
+    channel.country,
+    channel.countryCode,
+    channel.tvgId,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return /\bpakistan\b/.test(searchable);
 }
 
 function getChannelSearchText(channel) {
