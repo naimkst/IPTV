@@ -39,8 +39,11 @@ const PLAYLISTS = [
 const FAVORITES_KEY = "local-iptv-lab:favorites";
 const UNAVAILABLE_CHANNELS_KEY = "local-iptv-lab:unavailable-channels";
 const CUSTOM_CHANNELS_KEY = "local-iptv-lab:custom-channels";
+const CHANNEL_OVERRIDES_KEY = "local-iptv-lab:channel-overrides";
+const PLAYBACK_PROXY_KEY = "local-iptv-lab:playback-proxy";
 const CHANNEL_PAGE_SIZE = 160;
 const MAX_FATAL_STREAM_ERRORS = 2;
+const HLS_PROXY_PATH = "/api/hls-proxy";
 const FOCUS_FILTERS = {
   all: "all",
   sports: "sports",
@@ -62,8 +65,14 @@ export default function App() {
   const [customStreamName, setCustomStreamName] = useState("");
   const [customStreamUrl, setCustomStreamUrl] = useState("");
   const [customStreamError, setCustomStreamError] = useState("");
+  const [channelOverrides, setChannelOverrides] = useState(() =>
+    readStoredOverrides(CHANNEL_OVERRIDES_KEY),
+  );
   const [customChannels, setCustomChannels] = useState(() =>
     readStoredChannels(CUSTOM_CHANNELS_KEY),
+  );
+  const [useLocalProxy, setUseLocalProxy] = useState(() =>
+    readStoredBoolean(PLAYBACK_PROXY_KEY, true),
   );
   const [visibleLimit, setVisibleLimit] = useState(CHANNEL_PAGE_SIZE);
   const [favoriteIds, setFavoriteIds] = useState(() => readStoredIds(FAVORITES_KEY));
@@ -105,9 +114,13 @@ export default function App() {
     [unavailableChannelIds],
   );
 
+  const publicChannelsWithOverrides = useMemo(() => {
+    return channels.map((channel) => applyChannelOverride(channel, channelOverrides));
+  }, [channels, channelOverrides]);
+
   const allSavedChannels = useMemo(() => {
-    return [...channels, ...customChannels];
-  }, [channels, customChannels]);
+    return [...publicChannelsWithOverrides, ...customChannels];
+  }, [publicChannelsWithOverrides, customChannels]);
 
   const unavailableChannels = useMemo(() => {
     return allSavedChannels.filter((channel) => unavailableSet.has(channel.id));
@@ -230,6 +243,22 @@ export default function App() {
   }, [customChannels]);
 
   useEffect(() => {
+    try {
+      window.localStorage.setItem(CHANNEL_OVERRIDES_KEY, JSON.stringify(channelOverrides));
+    } catch {
+      // Overrides remain available for this session if localStorage is blocked.
+    }
+  }, [channelOverrides]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(PLAYBACK_PROXY_KEY, JSON.stringify(useLocalProxy));
+    } catch {
+      // Proxy preference remains available for this session if localStorage is blocked.
+    }
+  }, [useLocalProxy]);
+
+  useEffect(() => {
     if (!hlsRef.current) {
       return;
     }
@@ -243,6 +272,7 @@ export default function App() {
     }
 
     const video = videoRef.current;
+    const playbackUrl = getPlaybackUrl(selectedChannel.url, useLocalProxy);
     let hls = null;
     let cancelled = false;
     let retryTimer = null;
@@ -261,6 +291,24 @@ export default function App() {
       if (!cancelled) {
         setPlayerState({ loading: false, error: message });
       }
+    };
+
+    const clearPlayerMessage = () => {
+      if (cancelled) {
+        return;
+      }
+
+      setPlayerState((current) =>
+        current.error ? { ...current, error: "" } : current,
+      );
+    };
+
+    video.addEventListener("play", clearPlayerMessage);
+    video.addEventListener("playing", clearPlayerMessage);
+
+    const removePlayerMessageListeners = () => {
+      video.removeEventListener("play", clearPlayerMessage);
+      video.removeEventListener("playing", clearPlayerMessage);
     };
 
     const clearRetryTimer = () => {
@@ -314,7 +362,10 @@ export default function App() {
 
     if (!selectedChannel.isHls) {
       reportError("This channel is not an HLS .m3u8 stream, so this browser player cannot play it.");
-      return undefined;
+      return () => {
+        cancelled = true;
+        removePlayerMessageListeners();
+      };
     }
 
     const startStatsTracking = (getHls) => {
@@ -409,7 +460,7 @@ export default function App() {
       });
 
       hls.attachMedia(video);
-      hls.loadSource(selectedChannel.url);
+      hls.loadSource(playbackUrl);
 
       return () => {
         cancelled = true;
@@ -418,6 +469,7 @@ export default function App() {
         if (hlsRef.current === hls) {
           hlsRef.current = null;
         }
+        removePlayerMessageListeners();
         hls?.destroy();
         video.pause();
         video.removeAttribute("src");
@@ -427,7 +479,7 @@ export default function App() {
 
     if (video.canPlayType("application/vnd.apple.mpegurl")) {
       const stopStatsTracking = startStatsTracking(() => null);
-      video.src = selectedChannel.url;
+      video.src = playbackUrl;
       const onLoadedMetadata = () => {
         clearRetryTimer();
         setPlayerState({ loading: false, error: "" });
@@ -446,6 +498,7 @@ export default function App() {
         stopStatsTracking();
         video.removeEventListener("loadedmetadata", onLoadedMetadata);
         video.removeEventListener("error", onError);
+        removePlayerMessageListeners();
         video.pause();
         video.removeAttribute("src");
         video.load();
@@ -453,8 +506,11 @@ export default function App() {
     }
 
     reportError("HLS playback is not supported by this browser.");
-    return undefined;
-  }, [selectedChannel]);
+    return () => {
+      cancelled = true;
+      removePlayerMessageListeners();
+    };
+  }, [selectedChannel, useLocalProxy]);
 
   async function loadPlaylist() {
     setPlaylistState({
@@ -567,7 +623,7 @@ export default function App() {
     const url = customStreamUrl.trim();
     const name = customStreamName.trim() || getNameFromUrl(url);
 
-    if (!/^https?:\/\//i.test(url) || !/\.m3u8(\?|#|$)/i.test(url)) {
+    if (!isDirectHlsUrl(url)) {
       setCustomStreamError("Enter a direct http(s) .m3u8 HLS URL.");
       return;
     }
@@ -602,6 +658,68 @@ export default function App() {
     setCustomStreamName("");
     setCustomStreamUrl("");
     selectChannel(customChannel);
+  }
+
+  function saveOverrideForSelectedChannel() {
+    const url = customStreamUrl.trim();
+
+    if (!selectedChannel || selectedChannel.isCustom) {
+      setCustomStreamError("Select a public channel first.");
+      return;
+    }
+
+    if (!isDirectHlsUrl(url)) {
+      setCustomStreamError("Enter a direct http(s) .m3u8 HLS URL.");
+      return;
+    }
+
+    const override = {
+      url,
+      savedAt: new Date().toISOString(),
+    };
+
+    setCustomStreamError("");
+    setChannelOverrides((current) => ({
+      ...current,
+      [selectedChannel.id]: override,
+    }));
+    setUnavailableChannelIds((current) =>
+      current.filter((channelId) => channelId !== selectedChannel.id),
+    );
+    setCustomStreamUrl("");
+    setCustomStreamName("");
+    selectChannel({
+      ...selectedChannel,
+      url,
+      originalUrl: selectedChannel.originalUrl || selectedChannel.url,
+      hasOverride: true,
+      overrideUrl: url,
+    });
+  }
+
+  function removeSelectedOverride() {
+    if (!selectedChannel?.hasOverride) {
+      return;
+    }
+
+    setChannelOverrides((current) => {
+      const next = { ...current };
+      delete next[selectedChannel.id];
+      return next;
+    });
+    setSelectedChannel((current) => {
+      if (!current || current.id !== selectedChannel.id) {
+        return current;
+      }
+
+      return {
+        ...current,
+        url: current.originalUrl || current.url,
+        originalUrl: undefined,
+        hasOverride: false,
+        overrideUrl: "",
+      };
+    });
   }
 
   function deleteCustomChannel(channel) {
@@ -701,6 +819,12 @@ export default function App() {
                 <Play size={18} />
                 Save & Play
               </button>
+              {selectedChannel && !selectedChannel.isCustom && (
+                <button className="text-button" type="button" onClick={saveOverrideForSelectedChannel}>
+                  <RefreshCcw size={18} />
+                  Use for selected
+                </button>
+              )}
               {customStreamError && <p className="form-error">{customStreamError}</p>}
             </form>
 
@@ -930,6 +1054,8 @@ export default function App() {
                   ))}
                   {selectedChannel.country && <span>{selectedChannel.country}</span>}
                   <span>HLS</span>
+                  {useLocalProxy && <span>Local proxy</span>}
+                  {selectedChannel.hasOverride && <span>Local override</span>}
                   {selectedChannel.sourceName && <span>{selectedChannel.sourceName}</span>}
                 </div>
               ) : (
@@ -980,6 +1106,21 @@ export default function App() {
                 <RefreshCcw size={18} />
                 Auto-skip failed
               </button>
+              <button
+                className={`text-button ${useLocalProxy ? "is-active" : ""}`}
+                type="button"
+                onClick={() => setUseLocalProxy((value) => !value)}
+                title="Route HLS through the localhost dev server for CORS-safe public stream testing."
+              >
+                <RefreshCcw size={18} />
+                Local proxy
+              </button>
+              {selectedChannel.hasOverride && (
+                <button className="text-button" type="button" onClick={removeSelectedOverride}>
+                  <Trash2 size={18} />
+                  Remove override
+                </button>
+              )}
             </div>
           )}
 
@@ -1141,6 +1282,15 @@ function readStoredIds(key) {
   }
 }
 
+function readStoredBoolean(key, fallback) {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(key) || "null");
+    return typeof parsed === "boolean" ? parsed : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 function readStoredChannels(key) {
   try {
     const parsed = JSON.parse(window.localStorage.getItem(key) || "[]");
@@ -1153,6 +1303,62 @@ function readStoredChannels(key) {
   } catch {
     return [];
   }
+}
+
+function readStoredOverrides(key) {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(key) || "{}");
+
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+
+    return Object.fromEntries(
+      Object.entries(parsed)
+        .filter(([, override]) => isDirectHlsUrl(override?.url))
+        .map(([channelId, override]) => [
+          channelId,
+          {
+            url: override.url.trim(),
+            savedAt: override.savedAt || "",
+          },
+        ]),
+    );
+  } catch {
+    return {};
+  }
+}
+
+function applyChannelOverride(channel, overrides) {
+  const override = overrides[channel.id];
+
+  if (!isDirectHlsUrl(override?.url)) {
+    return channel;
+  }
+
+  return {
+    ...channel,
+    url: override.url.trim(),
+    originalUrl: channel.url,
+    overrideUrl: override.url.trim(),
+    hasOverride: true,
+  };
+}
+
+function isDirectHlsUrl(url = "") {
+  return /^https?:\/\//i.test(url.trim()) && /\.m3u8(\?|#|$)/i.test(url.trim());
+}
+
+function getPlaybackUrl(url, useLocalProxy) {
+  if (!useLocalProxy || !isLocalHostPage()) {
+    return url;
+  }
+
+  return `${HLS_PROXY_PATH}?url=${encodeURIComponent(url)}`;
+}
+
+function isLocalHostPage() {
+  return ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
 }
 
 function splitCategories(category = "") {
@@ -1172,6 +1378,7 @@ function formatChannelMeta(channel) {
   const parts = [
     ...splitCategories(channel.category).slice(0, 2),
     channel.country,
+    channel.hasOverride ? "Local override" : "",
     channel.sourceName,
   ].filter(Boolean);
   return parts.length > 0 ? parts.join(" / ") : "Public stream";

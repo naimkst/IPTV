@@ -22,11 +22,13 @@ The app runs on localhost, fetches the playlists directly in the browser, parses
 - `Try next` control for manually jumping to the next channel in the current filter
 - Custom HLS tester for saving and playing direct `.m3u8` URLs you are allowed to use
 - Separate `Custom` tab for saved local channels, with delete controls
+- Local per-channel overrides for replacing stale playlist URLs with direct legal `.m3u8` URLs you are allowed to use
 - Sports, World Cup, Pakistan, and Bangladesh focus buttons for quickly narrowing the channel list
 - Search, category filter, country filter, and favorites-only filter
 - Favorites saved in `localStorage`
 - HLS.js playback for `.m3u8` streams
 - Quality selector with `Optimize` adaptive mode and fixed levels such as `144p`, `HD`, or `4K` when the stream advertises them
+- Local HLS proxy toggle for public streams that fail in the browser because of CORS
 - Buffer-ahead and live-delay readouts for the current stream
 - Loading, empty, and error states
 - Responsive TV-style layout for desktop and large-screen browsers
@@ -52,10 +54,12 @@ The dev server is configured to bind only to `127.0.0.1`. It is not exposed to o
 - This project intentionally includes no premium, paid, or pirated IPTV sources.
 - Some public streams may be offline, geo-restricted, or blocked by browser CORS rules.
 - Only HLS `.m3u8` streams are supported by the player.
+- The `Local proxy` playback toggle routes HLS playlists, segments, and keys through the localhost Vite server. It can fix CORS-only failures, but it cannot unlock geo-blocked, token-protected, paid, or offline streams.
 - The Free-TV raw GitHub URL is a playlist file. It also contains some website links such as YouTube/Twitch pages, which are skipped because they are not direct HLS streams.
 - Public HLS links can go offline or become geo-blocked. The app marks failed streams locally after playback failure; they stay visible with a retry badge, and `Clear failed marks` resets those labels.
 - The Sports and World Cup filters only surface public streams from the included legal playlists. They do not bypass broadcast rights and do not guarantee official match coverage in your country.
 - During popular matches, public streams may fail from traffic, capacity limits, geo-blocking, or rights enforcement. Use official legal broadcasters/apps for reliable live match coverage.
 - Saved custom channels are stored only in your browser `localStorage`.
-- The custom HLS tester does not bypass access controls. Browser playback still requires the stream server to allow CORS and direct HLS segment access from localhost.
+- Saved channel overrides are stored only in your browser `localStorage`.
+- The custom HLS tester and local proxy do not bypass access controls. Playback still requires the stream server to allow direct HLS access.
 - Live HLS playback normally has delay because the browser buffers media segments. The exact delay is controlled by the stream provider and network conditions.
