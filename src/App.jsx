@@ -92,6 +92,7 @@ export default function App() {
   const [playerState, setPlayerState] = useState({
     loading: false,
     error: "",
+    hint: "",
   });
   const [qualitySelection, setQualitySelection] = useState("auto");
   const [qualityLevels, setQualityLevels] = useState([]);
@@ -282,14 +283,16 @@ export default function App() {
     setQualityLevels([]);
     setActiveQualityLabel("Optimize");
     setPlaybackStats({ bufferAhead: 0, liveDelay: null });
-    setPlayerState({ loading: true, error: "" });
+    setPlayerState({ loading: true, error: "", hint: "" });
     video.pause();
     video.removeAttribute("src");
     video.load();
 
-    const reportError = (message) => {
+    const failureHint = getStreamFailureHint(selectedChannel);
+
+    const reportError = (message, hint = "") => {
       if (!cancelled) {
-        setPlayerState({ loading: false, error: message });
+        setPlayerState({ loading: false, error: message, hint });
       }
     };
 
@@ -299,7 +302,7 @@ export default function App() {
       }
 
       setPlayerState((current) =>
-        current.error ? { ...current, error: "" } : current,
+        current.error ? { ...current, error: "", hint: "" } : current,
       );
     };
 
@@ -318,7 +321,7 @@ export default function App() {
       }
     };
 
-    const markUnavailableStream = (message) => {
+    const markUnavailableStream = (message, hint = failureHint) => {
       if (cancelled) {
         return;
       }
@@ -335,9 +338,9 @@ export default function App() {
 
         return [...current, selectedChannel.id];
       });
-      setPlayerState({ loading: false, error: message });
+      setPlayerState({ loading: false, error: message, hint });
       setSelectedChannel((current) =>
-        current?.id === selectedChannel.id ? nextChannel : current,
+        current?.id === selectedChannel.id && nextChannel ? nextChannel : current,
       );
     };
 
@@ -361,7 +364,10 @@ export default function App() {
     };
 
     if (!selectedChannel.isHls) {
-      reportError("This channel is not an HLS .m3u8 stream, so this browser player cannot play it.");
+      reportError(
+        "This channel is not an HLS .m3u8 stream, so this browser player cannot play it.",
+        "Use a direct public .m3u8 stream URL for browser playback.",
+      );
       return () => {
         cancelled = true;
         removePlayerMessageListeners();
@@ -410,7 +416,7 @@ export default function App() {
           clearRetryTimer();
           setQualityLevels(createQualityLevels(hls.levels));
           applyQualitySelection(hls, "auto");
-          setPlayerState({ loading: false, error: "" });
+          setPlayerState({ loading: false, error: "", hint: "" });
           startPlayback();
         }
       });
@@ -431,21 +437,26 @@ export default function App() {
         if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
           if (streamFailureCountRef.current < MAX_FATAL_STREAM_ERRORS) {
             hls.startLoad();
-            reportError("Network trouble while loading the stream. Retrying once...");
+            reportError(
+              "The stream source did not respond. Retrying once...",
+              failureHint,
+            );
             markIfStillUnavailable(
               "Stream stayed unreachable after retry. It was marked as failed.",
             );
             return;
           }
 
-          markUnavailableStream("Stream is offline, blocked, or unreachable. It was marked as failed.");
+          markUnavailableStream(
+            "Stream is offline, blocked, or unreachable. It was marked as failed.",
+          );
           return;
         }
 
         if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
           if (streamFailureCountRef.current < MAX_FATAL_STREAM_ERRORS) {
             hls.recoverMediaError();
-            reportError("Media decode trouble. Attempting recovery...");
+            reportError("Media decode trouble. Attempting recovery...", failureHint);
             markIfStillUnavailable(
               "Stream media could not recover. It was marked as failed.",
             );
@@ -482,7 +493,7 @@ export default function App() {
       video.src = playbackUrl;
       const onLoadedMetadata = () => {
         clearRetryTimer();
-        setPlayerState({ loading: false, error: "" });
+        setPlayerState({ loading: false, error: "", hint: "" });
         setActiveQualityLabel("Native");
         startPlayback();
       };
@@ -1025,6 +1036,7 @@ export default function App() {
                   <div className="player-overlay player-overlay-error">
                     <AlertCircle />
                     <span>{playerState.error}</span>
+                    {playerState.hint && <small>{playerState.hint}</small>}
                   </div>
                 )}
               </>
@@ -1529,6 +1541,18 @@ function getChannelSearchText(channel) {
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
+}
+
+function getStreamFailureHint(channel) {
+  if (channel?.hasOverride) {
+    return "The saved override URL did not respond. Replace it with a working legal .m3u8 URL or remove the override.";
+  }
+
+  if (channel?.isCustom) {
+    return "Check that this custom URL is a direct public .m3u8 stream and is online from your network.";
+  }
+
+  return "This public playlist URL is stale, offline, or blocked. Paste a working legal direct .m3u8 above and click Use for selected.";
 }
 
 function dedupeChannelsByUrl(channels) {

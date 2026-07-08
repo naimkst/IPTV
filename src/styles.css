@@ -545,6 +545,17 @@ select {
   font-weight: 800;
 }
 
+.player-overlay span,
+.player-overlay small {
+  max-width: 760px;
+}
+
+.player-overlay small {
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
 .player-overlay-error {
   color: var(--danger);
 }
