@@ -26,6 +26,7 @@ The app runs on localhost, fetches the playlists directly in the browser, parses
 - Sports, World Cup, Pakistan, and Bangladesh focus buttons for quickly narrowing the channel list
 - Search, category filter, country filter, and favorites-only filter
 - Favorites saved in `localStorage`
+- Backup/Restore buttons for moving saved favorites, custom channels, failed marks, overrides, and proxy preference between browser origins
 - HLS.js playback for `.m3u8` streams
 - Quality selector with default `Best available`, `Optimize` adaptive mode, and fixed levels such as `144p`, `HD`, or `4K` when the stream advertises them
 - Local HLS proxy toggle for public streams that fail in the browser because of CORS
@@ -44,10 +45,10 @@ npm run dev
 Open:
 
 ```text
-http://localhost:5173
+http://127.0.0.1:5173
 ```
 
-The dev server is configured to bind only to `127.0.0.1`. It is not exposed to other devices on your network. If `5173` is already in use, Vite will print the next available localhost URL in the terminal.
+The dev server is configured to bind only to `127.0.0.1:5173`. It is not exposed to other devices on your network. The port is strict so saved browser data stays on the same origin after restarts. If `5173` is already in use, stop the old dev server and run `npm run dev` again.
 
 ## Notes
 
@@ -61,5 +62,6 @@ The dev server is configured to bind only to `127.0.0.1`. It is not exposed to o
 - During popular matches, public streams may fail from traffic, capacity limits, geo-blocking, or rights enforcement. Use official legal broadcasters/apps for reliable live match coverage.
 - Saved custom channels are stored only in your browser `localStorage`.
 - Saved channel overrides are stored only in your browser `localStorage`.
+- Browser storage is tied to the exact origin. `http://127.0.0.1:5173`, `http://localhost:5173`, and `http://127.0.0.1:5174` have separate saved data. Use Backup/Restore if you switch origins.
 - The custom HLS tester and local proxy do not bypass access controls. Playback still requires the stream server to allow direct HLS access.
 - Live HLS playback normally has delay because the browser buffers media segments. The exact delay is controlled by the stream provider and network conditions.

@@ -284,6 +284,26 @@ select {
   margin-top: 12px;
 }
 
+.storage-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.storage-tools p {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.visually-hidden-file {
+  display: none;
+}
+
 .text-button {
   min-height: 46px;
   display: inline-flex;

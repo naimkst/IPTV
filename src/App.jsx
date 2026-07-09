@@ -4,6 +4,7 @@ import {
   AlertCircle,
   Check,
   Copy,
+  Download,
   Heart,
   Loader2,
   MapPin,
@@ -13,6 +14,7 @@ import {
   Star,
   Trash2,
   Trophy,
+  Upload,
 } from "lucide-react";
 import { parseM3U } from "./lib/m3u.js";
 
@@ -96,6 +98,7 @@ export default function App() {
     error: "",
     hint: "",
   });
+  const [backupMessage, setBackupMessage] = useState("");
   const [copiedStreamUrl, setCopiedStreamUrl] = useState(false);
   const [qualitySelection, setQualitySelection] = useState("best");
   const [qualityLevels, setQualityLevels] = useState([]);
@@ -108,6 +111,7 @@ export default function App() {
   const videoRef = useRef(null);
   const hlsRef = useRef(null);
   const channelRefs = useRef([]);
+  const backupInputRef = useRef(null);
   const streamFailureCountRef = useRef(0);
   const filteredChannelsRef = useRef([]);
   const autoSkipFailedRef = useRef(autoSkipFailed);
@@ -766,6 +770,68 @@ export default function App() {
     setSelectedChannel((current) => (current?.id === channel.id ? null : current));
   }
 
+  function exportSavedData() {
+    const backup = {
+      app: "local-iptv-lab",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      origin: window.location.origin,
+      data: {
+        favoriteIds,
+        unavailableChannelIds,
+        customChannels,
+        channelOverrides,
+        useLocalProxy,
+      },
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = `local-iptv-lab-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    setBackupMessage("Backup downloaded.");
+  }
+
+  function openBackupRestore() {
+    backupInputRef.current?.click();
+  }
+
+  async function restoreSavedData(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(await file.text());
+      const data = parsed?.data && typeof parsed.data === "object" ? parsed.data : parsed;
+      const nextFavoriteIds = normalizeStoredIds(data.favoriteIds);
+      const nextUnavailableIds = normalizeStoredIds(data.unavailableChannelIds);
+      const nextCustomChannels = normalizeStoredChannels(data.customChannels);
+      const nextOverrides = normalizeStoredOverrides(data.channelOverrides);
+      const nextUseLocalProxy =
+        typeof data.useLocalProxy === "boolean" ? data.useLocalProxy : useLocalProxy;
+
+      setFavoriteIds(nextFavoriteIds);
+      setUnavailableChannelIds(nextUnavailableIds);
+      setCustomChannels(nextCustomChannels);
+      setChannelOverrides(nextOverrides);
+      setUseLocalProxy(nextUseLocalProxy);
+      setBackupMessage(
+        `Restored ${nextCustomChannels.length.toLocaleString()} custom channel${nextCustomChannels.length === 1 ? "" : "s"} and ${nextFavoriteIds.length.toLocaleString()} favorite${nextFavoriteIds.length === 1 ? "" : "s"}.`,
+      );
+    } catch {
+      setBackupMessage("Could not restore this backup file.");
+    }
+  }
+
   function handleChannelKeyDown(event, index) {
     const nextKeys = ["ArrowDown", "ArrowRight"];
     const previousKeys = ["ArrowUp", "ArrowLeft"];
@@ -981,6 +1047,25 @@ export default function App() {
                   Clear failed marks ({hiddenChannelCount.toLocaleString()})
                 </button>
               )}
+            </div>
+
+            <div className="storage-tools" aria-label="Saved data tools">
+              <button className="text-button" type="button" onClick={exportSavedData}>
+                <Download size={18} />
+                Backup
+              </button>
+              <button className="text-button" type="button" onClick={openBackupRestore}>
+                <Upload size={18} />
+                Restore
+              </button>
+              <input
+                ref={backupInputRef}
+                className="visually-hidden-file"
+                type="file"
+                accept="application/json"
+                onChange={restoreSavedData}
+              />
+              {backupMessage && <p>{backupMessage}</p>}
             </div>
           </div>
 
@@ -1306,10 +1391,16 @@ function StateMessage({ icon, title, text }) {
 function readStoredIds(key) {
   try {
     const parsed = JSON.parse(window.localStorage.getItem(key) || "[]");
-    return Array.isArray(parsed) ? parsed : [];
+    return normalizeStoredIds(parsed);
   } catch {
     return [];
   }
+}
+
+function normalizeStoredIds(value) {
+  return Array.isArray(value)
+    ? [...new Set(value.filter((item) => typeof item === "string" && item))]
+    : [];
 }
 
 function readStoredBoolean(key, fallback) {
@@ -1324,39 +1415,45 @@ function readStoredBoolean(key, fallback) {
 function readStoredChannels(key) {
   try {
     const parsed = JSON.parse(window.localStorage.getItem(key) || "[]");
-
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-
-    return parsed.filter((channel) => channel?.id && channel?.url && channel?.isHls);
+    return normalizeStoredChannels(parsed);
   } catch {
     return [];
   }
 }
 
+function normalizeStoredChannels(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((channel) => channel?.id && channel?.url && channel?.isHls);
+}
+
 function readStoredOverrides(key) {
   try {
     const parsed = JSON.parse(window.localStorage.getItem(key) || "{}");
-
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return {};
-    }
-
-    return Object.fromEntries(
-      Object.entries(parsed)
-        .filter(([, override]) => isDirectHlsUrl(override?.url))
-        .map(([channelId, override]) => [
-          channelId,
-          {
-            url: override.url.trim(),
-            savedAt: override.savedAt || "",
-          },
-        ]),
-    );
+    return normalizeStoredOverrides(parsed);
   } catch {
     return {};
   }
+}
+
+function normalizeStoredOverrides(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([channelId, override]) => channelId && isDirectHlsUrl(override?.url))
+      .map(([channelId, override]) => [
+        channelId,
+        {
+          url: override.url.trim(),
+          savedAt: override.savedAt || "",
+        },
+      ]),
+  );
 }
 
 function applyChannelOverride(channel, overrides) {
